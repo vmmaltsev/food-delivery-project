@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     tools {
-        maven 'maven'  // Настроенный Maven в Jenkins
-        nodejs 'nodejs' // Настроенный Node.js в Jenkins
+        maven 'maven'       // Настроенный Maven в Jenkins
+        nodejs 'nodejs'     // Настроенный Node.js в Jenkins
     }
 
     environment {
@@ -37,27 +37,21 @@ pipeline {
                 stage('Build Order Service') {
                     steps {
                         dir('order-service') {
-                            cache(path: '~/.m2/repository', key: 'maven-deps') {
-                                sh 'mvn clean test package'
-                            }
+                            sh 'mvn clean test package'
                         }
                     }
                 }
                 stage('Build Restaurant Service') {
                     steps {
                         dir('restaurant-service') {
-                            cache(path: '~/.m2/repository', key: 'maven-deps') {
-                                sh 'mvn clean test package'
-                            }
+                            sh 'mvn clean test package'
                         }
                     }
                 }
                 stage('Build Notification Service') {
                     steps {
                         dir('notification-service') {
-                            cache(path: '~/.m2/repository', key: 'maven-deps') {
-                                sh 'mvn clean test package'
-                            }
+                            sh 'mvn clean test package'
                         }
                     }
                 }
@@ -67,9 +61,7 @@ pipeline {
         stage('Build & Test Frontend') {
             steps {
                 dir('frontend') {
-                    cache(path: 'node_modules', key: 'npm-deps') {
-                        sh 'npm install'
-                    }
+                    sh 'npm install'
                     sh 'npm run build'
                 }
             }
@@ -79,22 +71,22 @@ pipeline {
             parallel {
                 stage('Build Order Service Image') {
                     steps {
-                        buildDockerImage( dir: 'order-service', image: ORDER_IMAGE )
+                        buildDockerImage(dir: 'order-service', image: ORDER_IMAGE)
                     }
                 }
                 stage('Build Restaurant Service Image') {
                     steps {
-                        buildDockerImage( dir: 'restaurant-service', image: RESTAURANT_IMAGE )
+                        buildDockerImage(dir: 'restaurant-service', image: RESTAURANT_IMAGE)
                     }
                 }
                 stage('Build Notification Service Image') {
                     steps {
-                        buildDockerImage( dir: 'notification-service', image: NOTIFICATION_IMAGE )
+                        buildDockerImage(dir: 'notification-service', image: NOTIFICATION_IMAGE)
                     }
                 }
                 stage('Build Frontend Image') {
                     steps {
-                        buildDockerImage( dir: 'frontend', image: FRONTEND_IMAGE )
+                        buildDockerImage(dir: 'frontend', image: FRONTEND_IMAGE)
                     }
                 }
             }
