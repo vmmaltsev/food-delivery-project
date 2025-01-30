@@ -96,51 +96,35 @@ pipeline {
         }
 
         stage('Push Docker Images') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-                    sh """
-                        echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
-                    """
+            stages {
+                stage('Login to Docker Hub') {
+                    steps {
+                        withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                            sh """
+                                echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+                            """
+                        }
+                    }
                 }
-
-                parallel {
-                    stage('Push Order Service Image') {
-                        steps {
-                            retry(3) {
-                                sh """
-                                    docker push ${ORDER_IMAGE}:latest
-                                    docker push ${ORDER_IMAGE}:${env.BUILD_NUMBER}
-                                """
+                
+                stage('Push Images') {
+                    matrix {
+                        axes {
+                            axis {
+                                name 'SERVICE'
+                                values 'ORDER_IMAGE', 'RESTAURANT_IMAGE', 'NOTIFICATION_IMAGE', 'FRONTEND_IMAGE'
                             }
                         }
-                    }
-                    stage('Push Restaurant Service Image') {
-                        steps {
-                            retry(3) {
-                                sh """
-                                    docker push ${RESTAURANT_IMAGE}:latest
-                                    docker push ${RESTAURANT_IMAGE}:${env.BUILD_NUMBER}
-                                """
-                            }
-                        }
-                    }
-                    stage('Push Notification Service Image') {
-                        steps {
-                            retry(3) {
-                                sh """
-                                    docker push ${NOTIFICATION_IMAGE}:latest
-                                    docker push ${NOTIFICATION_IMAGE}:${env.BUILD_NUMBER}
-                                """
-                            }
-                        }
-                    }
-                    stage('Push Frontend Image') {
-                        steps {
-                            retry(3) {
-                                sh """
-                                    docker push ${FRONTEND_IMAGE}:latest
-                                    docker push ${FRONTEND_IMAGE}:${env.BUILD_NUMBER}
-                                """
+                        stages {
+                            stage("Push \${SERVICE}") {
+                                steps {
+                                    retry(3) {
+                                        sh """
+                                            docker push \${env[SERVICE]}:latest
+                                            docker push \${env[SERVICE]}:${env.BUILD_NUMBER}
+                                        """
+                                    }
+                                }
                             }
                         }
                     }
