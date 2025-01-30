@@ -1,0 +1,173 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_REGISTRY = "maltsevvm"
+        FRONTEND_IMAGE = "${DOCKER_REGISTRY}/food-delivery-frontend"
+        ORDER_IMAGE = "${DOCKER_REGISTRY}/order-service"
+        RESTAURANT_IMAGE = "${DOCKER_REGISTRY}/restaurant-service"
+        NOTIFICATION_IMAGE = "${DOCKER_REGISTRY}/notification-service"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/vmmaltsev/food-delivery-project.git'
+            }
+        }
+
+        stage('Build & Test Backend Services') {
+            parallel {
+                stage('Order Service') {
+                    steps {
+                        dir('order-service') {
+                            sh 'mvn clean test && mvn package'
+                        }
+                    }
+                }
+                stage('Restaurant Service') {
+                    steps {
+                        dir('restaurant-service') {
+                            sh 'mvn clean test && mvn package'
+                        }
+                    }
+                }
+                stage('Notification Service') {
+                    steps {
+                        dir('notification-service') {
+                            sh 'mvn clean test && mvn package'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build & Test Frontend') {
+            steps {
+                dir('frontend') {
+                    sh 'npm install && npm run build'
+                }
+            }
+        }
+
+        stage('Build Docker Images') {
+            parallel {
+                stage('Build Order Service Image') {
+                    steps {
+                        dir('order-service') {
+                            sh """
+                                docker build -t ${ORDER_IMAGE}:latest .
+                                docker tag ${ORDER_IMAGE}:latest ${ORDER_IMAGE}:${env.BUILD_NUMBER}
+                            """
+                        }
+                    }
+                }
+                stage('Build Restaurant Service Image') {
+                    steps {
+                        dir('restaurant-service') {
+                            sh """
+                                docker build -t ${RESTAURANT_IMAGE}:latest .
+                                docker tag ${RESTAURANT_IMAGE}:latest ${RESTAURANT_IMAGE}:${env.BUILD_NUMBER}
+                            """
+                        }
+                    }
+                }
+                stage('Build Notification Service Image') {
+                    steps {
+                        dir('notification-service') {
+                            sh """
+                                docker build -t ${NOTIFICATION_IMAGE}:latest .
+                                docker tag ${NOTIFICATION_IMAGE}:latest ${NOTIFICATION_IMAGE}:${env.BUILD_NUMBER}
+                            """
+                        }
+                    }
+                }
+                stage('Build Frontend Image') {
+                    steps {
+                        dir('frontend') {
+                            sh """
+                                docker build -t ${FRONTEND_IMAGE}:latest .
+                                docker tag ${FRONTEND_IMAGE}:latest ${FRONTEND_IMAGE}:${env.BUILD_NUMBER}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Push Docker Images') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    sh """
+                        echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+                    """
+                }
+
+                parallel {
+                    stage('Push Order Service Image') {
+                        steps {
+                            retry(3) {
+                                sh """
+                                    docker push ${ORDER_IMAGE}:latest
+                                    docker push ${ORDER_IMAGE}:${env.BUILD_NUMBER}
+                                """
+                            }
+                        }
+                    }
+                    stage('Push Restaurant Service Image') {
+                        steps {
+                            retry(3) {
+                                sh """
+                                    docker push ${RESTAURANT_IMAGE}:latest
+                                    docker push ${RESTAURANT_IMAGE}:${env.BUILD_NUMBER}
+                                """
+                            }
+                        }
+                    }
+                    stage('Push Notification Service Image') {
+                        steps {
+                            retry(3) {
+                                sh """
+                                    docker push ${NOTIFICATION_IMAGE}:latest
+                                    docker push ${NOTIFICATION_IMAGE}:${env.BUILD_NUMBER}
+                                """
+                            }
+                        }
+                    }
+                    stage('Push Frontend Image') {
+                        steps {
+                            retry(3) {
+                                sh """
+                                    docker push ${FRONTEND_IMAGE}:latest
+                                    docker push ${FRONTEND_IMAGE}:${env.BUILD_NUMBER}
+                                """
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                script {
+                    sh "helm lint ./helm/food-delivery-chart"
+
+                    sh """
+                        helm upgrade --install food-delivery ./helm/food-delivery-chart \
+                        --set orderService.image.repository=${ORDER_IMAGE},orderService.image.tag=latest \
+                        --set restaurantService.image.repository=${RESTAURANT_IMAGE},restaurantService.image.tag=latest \
+                        --set notificationService.image.repository=${NOTIFICATION_IMAGE},notificationService.image.tag=latest \
+                        --set frontend.image.repository=${FRONTEND_IMAGE},frontend.image.tag=latest
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
