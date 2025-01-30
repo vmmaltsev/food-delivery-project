@@ -2,7 +2,8 @@ pipeline {
     agent any
 
     tools {
-        maven 'maven' // Используем Maven, который настроен в Jenkins
+        maven 'maven'  // Используем Maven, который настроен в Jenkins
+        nodejs 'nodejs' // Используем Node.js (должен быть настроен в Jenkins -> Global Tool Configuration)
     }
 
     environment {
@@ -20,9 +21,13 @@ pipeline {
             }
         }
 
-        stage('Verify Maven Installation') {
+        stage('Verify Tools Installation') {
             steps {
-                sh 'mvn -version'
+                script {
+                    sh 'mvn -version'
+                    sh 'node -v'
+                    sh 'npm -v'
+                }
             }
         }
 
