@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru"> <!-- ✅ Язык страницы - русский -->
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- ✅ Улучшение производительности -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+
+  <!-- ✅ Favicon и PWA поддержка -->
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#646cff" />
+
+  <!-- ✅ SEO мета-теги -->
+  <meta name="description" content="Современное веб-приложение на Vite + React + TypeScript" />
+  <meta name="keywords" content="Vite, React, TypeScript, Frontend, Web Development" />
+  <meta name="author" content="Ваше Имя" />
+
+  <!-- ✅ Open Graph (для соцсетей) -->
+  <meta property="og:title" content="Vite + React + TypeScript" />
+  <meta property="og:description" content="Быстрое и легковесное приложение на Vite" />
+  <meta property="og:image" content="https://yourwebsite.com/og-image.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://yourwebsite.com" />
+
+  <!-- ✅ Twitter Card (для Twitter/X) -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Vite + React + TypeScript" />
+  <meta name="twitter:description" content="Быстрое и легковесное приложение на Vite" />
+  <meta name="twitter:image" content="https://yourwebsite.com/twitter-image.png" />
+
+  <!-- ✅ Улучшенная безопасность -->
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; 
+             script-src 'self' 'unsafe-inline'; 
+             style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; 
+             img-src 'self' data: https://yourwebsite.com; 
+             font-src 'self' https://fonts.gstatic.com; 
+             connect-src 'self' https://api.yourwebsite.com;">
+
+  <title>Vite + React + TS</title>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>

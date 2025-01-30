@@ -1,0 +1,117 @@
+services:
+  # Zookeeper (для Kafka)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+    networks:
+      - backend
+
+  # Kafka
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    networks:
+      - backend
+
+  # База данных для Order Service
+  postgres-order:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: orderdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-order-data:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  # База данных для Restaurant Service
+  postgres-restaurant:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: restaurantdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres-restaurant-data:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  # Order Service
+  order-service:
+    build: ./order-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-order:5432/orderdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: secret
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8082:8082"
+    depends_on:
+      - kafka
+      - postgres-order
+    restart: always
+    networks:
+      - backend
+
+  # Restaurant Service
+  restaurant-service:
+    build: ./restaurant-service
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-restaurant:5432/restaurantdb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: secret
+    ports:
+      - "8081:8081"
+    depends_on:
+      - postgres-restaurant
+    restart: always
+    networks:
+      - backend
+
+  # Notification Service
+  notification-service:
+    build: ./notification-service
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8083:8083"
+    depends_on:
+      - kafka
+    restart: always
+    networks:
+      - backend
+
+  # Frontend
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - restaurant-service
+      - order-service
+    restart: always
+    networks:
+      - backend
+
+volumes:
+  postgres-order-data:
+  postgres-restaurant-data:
+
+networks:
+  backend:
