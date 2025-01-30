@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    tools {
+        maven 'maven' // Используем Maven, который настроен в Jenkins
+    }
+
     environment {
         DOCKER_REGISTRY = "maltsevvm"
         FRONTEND_IMAGE = "${DOCKER_REGISTRY}/food-delivery-frontend"
@@ -16,26 +20,38 @@ pipeline {
             }
         }
 
+        stage('Verify Maven Installation') {
+            steps {
+                sh 'mvn -version'
+            }
+        }
+
         stage('Build & Test Backend Services') {
             parallel {
                 stage('Order Service') {
                     steps {
                         dir('order-service') {
-                            sh 'mvn clean test && mvn package'
+                            sh '''
+                                mvn clean test && mvn package || exit 1
+                            '''
                         }
                     }
                 }
                 stage('Restaurant Service') {
                     steps {
                         dir('restaurant-service') {
-                            sh 'mvn clean test && mvn package'
+                            sh '''
+                                mvn clean test && mvn package || exit 1
+                            '''
                         }
                     }
                 }
                 stage('Notification Service') {
                     steps {
                         dir('notification-service') {
-                            sh 'mvn clean test && mvn package'
+                            sh '''
+                                mvn clean test && mvn package || exit 1
+                            '''
                         }
                     }
                 }
@@ -45,7 +61,9 @@ pipeline {
         stage('Build & Test Frontend') {
             steps {
                 dir('frontend') {
-                    sh 'npm install && npm run build'
+                    sh '''
+                        npm install && npm run build || exit 1
+                    '''
                 }
             }
         }
@@ -106,7 +124,7 @@ pipeline {
                         }
                     }
                 }
-                
+
                 stage('Push Images') {
                     matrix {
                         axes {
