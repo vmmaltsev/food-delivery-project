@@ -158,8 +158,8 @@ def buildDockerImage(Map params) {
         script {
             echo "Building Docker image for ${params.image} with tag 'latest'"
             def image = docker.build("${params.image}:latest")
-            echo "Tagging image ${params.image}:latest as ${params.image}:${env.BUILD_TAG}"
-            image.tag("${params.image}:${env.BUILD_TAG}")
+            echo "Tagging image ${params.image}:latest as ${env.BUILD_TAG}"
+            image.tag(env.BUILD_TAG) // Исправлено
         }
     }
 }
