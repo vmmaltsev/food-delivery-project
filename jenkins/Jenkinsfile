@@ -22,13 +22,22 @@ pipeline {
             }
         }
 
+        stage('Print Environment Variables') { // Добавленный шаг для отладки
+            steps {
+                echo "DOCKER_REGISTRY: ${env.DOCKER_REGISTRY}"
+                echo "FRONTEND_IMAGE: ${env.FRONTEND_IMAGE}"
+                echo "ORDER_IMAGE: ${env.ORDER_IMAGE}"
+                echo "RESTAURANT_IMAGE: ${env.RESTAURANT_IMAGE}"
+                echo "NOTIFICATION_IMAGE: ${env.NOTIFICATION_IMAGE}"
+                echo "BUILD_TAG: ${env.BUILD_TAG}"
+            }
+        }
+
         stage('Verify Tools Installation') {
             steps {
-                script {
-                    sh 'mvn -version'
-                    sh 'node -v'
-                    sh 'npm -v'
-                }
+                sh 'mvn -version'
+                sh 'node -v'
+                sh 'npm -v'
             }
         }
 
@@ -71,22 +80,22 @@ pipeline {
             parallel {
                 stage('Build Order Image') {
                     steps {
-                        buildDockerImage(dir: 'order-service', image: ORDER_IMAGE)
+                        buildDockerImage(dir: 'order-service', image: env.ORDER_IMAGE)
                     }
                 }
                 stage('Build Restaurant Image') {
                     steps {
-                        buildDockerImage(dir: 'restaurant-service', image: RESTAURANT_IMAGE)
+                        buildDockerImage(dir: 'restaurant-service', image: env.RESTAURANT_IMAGE)
                     }
                 }
                 stage('Build Notification Image') {
                     steps {
-                        buildDockerImage(dir: 'notification-service', image: NOTIFICATION_IMAGE)
+                        buildDockerImage(dir: 'notification-service', image: env.NOTIFICATION_IMAGE)
                     }
                 }
                 stage('Build Frontend Image') {
                     steps {
-                        buildDockerImage(dir: 'frontend', image: FRONTEND_IMAGE)
+                        buildDockerImage(dir: 'frontend', image: env.FRONTEND_IMAGE)
                     }
                 }
             }
@@ -95,8 +104,8 @@ pipeline {
         stage('Push Docker Images') {
             steps {
                 script {
-                    withDockerRegistry([credentialsId: 'docker-hub-credentials', url: "https://${DOCKER_REGISTRY}"]) {
-                        def images = [ORDER_IMAGE, RESTAURANT_IMAGE, NOTIFICATION_IMAGE, FRONTEND_IMAGE]
+                    withDockerRegistry([credentialsId: 'docker-hub-credentials']) { // Удалён параметр url
+                        def images = [env.ORDER_IMAGE, env.RESTAURANT_IMAGE, env.NOTIFICATION_IMAGE, env.FRONTEND_IMAGE]
                         def pushStages = [:]
                         images.each { image ->
                             def imageName = image.split('/').last()
@@ -117,10 +126,10 @@ pipeline {
                         sh "helm lint ./helm/food-delivery-chart"
                         sh """
                             helm upgrade --install food-delivery ./helm/food-delivery-chart \
-                            --set orderService.image.repository=${ORDER_IMAGE},orderService.image.tag=${BUILD_TAG} \
-                            --set restaurantService.image.repository=${RESTAURANT_IMAGE},restaurantService.image.tag=${BUILD_TAG} \
-                            --set notificationService.image.repository=${NOTIFICATION_IMAGE},notificationService.image.tag=${BUILD_TAG} \
-                            --set frontend.image.repository=${FRONTEND_IMAGE},frontend.image.tag=${BUILD_TAG}
+                            --set orderService.image.repository=${env.ORDER_IMAGE},orderService.image.tag=${env.BUILD_TAG} \
+                            --set restaurantService.image.repository=${env.RESTAURANT_IMAGE},restaurantService.image.tag=${env.BUILD_TAG} \
+                            --set notificationService.image.repository=${env.NOTIFICATION_IMAGE},notificationService.image.tag=${env.BUILD_TAG} \
+                            --set frontend.image.repository=${env.FRONTEND_IMAGE},frontend.image.tag=${env.BUILD_TAG}
                         """
                         sh 'kubectl rollout status deployment/food-delivery'
                     } catch (Exception e) {
@@ -147,9 +156,17 @@ pipeline {
 def buildDockerImage(Map params) {
     dir(params.dir) {
         script {
+            echo "Building Docker image for ${params.image} with tag 'latest'"
             def image = docker.build("${params.image}:latest")
+            echo "Tagging image ${params.image}:latest as ${params.image}:${env.BUILD_TAG}"
             image.tag("${params.image}:${env.BUILD_TAG}")
         }
+    }
+}
+
+def dockerLogin() {
+    withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+        sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
     }
 }
 
