@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     tools {
-        maven 'maven'       // Настроенный Maven в Jenkins
-        nodejs 'nodejs'     // Настроенный Node.js в Jenkins
+        maven 'maven'
+        nodejs 'nodejs'
     }
 
     environment {
@@ -18,7 +18,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/vmmaltsev/food-delivery-project.git'
+                git branch: params.BRANCH_NAME ?: 'main', url: 'https://github.com/vmmaltsev/food-delivery-project.git'
             }
         }
 
@@ -34,25 +34,19 @@ pipeline {
 
         stage('Build & Test Backend Services') {
             parallel {
-                stage('Build Order Service') {
-                    steps {
-                        dir('order-service') {
-                            sh 'mvn clean test package'
-                        }
+                'Order Service': {
+                    dir('order-service') {
+                        sh 'mvn clean test package'
                     }
                 }
-                stage('Build Restaurant Service') {
-                    steps {
-                        dir('restaurant-service') {
-                            sh 'mvn clean test package'
-                        }
+                'Restaurant Service': {
+                    dir('restaurant-service') {
+                        sh 'mvn clean test package'
                     }
                 }
-                stage('Build Notification Service') {
-                    steps {
-                        dir('notification-service') {
-                            sh 'mvn clean test package'
-                        }
+                'Notification Service': {
+                    dir('notification-service') {
+                        sh 'mvn clean test package'
                     }
                 }
             }
@@ -69,25 +63,17 @@ pipeline {
 
         stage('Build Docker Images') {
             parallel {
-                stage('Build Order Service Image') {
-                    steps {
-                        buildDockerImage(dir: 'order-service', image: ORDER_IMAGE)
-                    }
+                'Build Order Image': {
+                    buildDockerImage(dir: 'order-service', image: ORDER_IMAGE)
                 }
-                stage('Build Restaurant Service Image') {
-                    steps {
-                        buildDockerImage(dir: 'restaurant-service', image: RESTAURANT_IMAGE)
-                    }
+                'Build Restaurant Image': {
+                    buildDockerImage(dir: 'restaurant-service', image: RESTAURANT_IMAGE)
                 }
-                stage('Build Notification Service Image') {
-                    steps {
-                        buildDockerImage(dir: 'notification-service', image: NOTIFICATION_IMAGE)
-                    }
+                'Build Notification Image': {
+                    buildDockerImage(dir: 'notification-service', image: NOTIFICATION_IMAGE)
                 }
-                stage('Build Frontend Image') {
-                    steps {
-                        buildDockerImage(dir: 'frontend', image: FRONTEND_IMAGE)
-                    }
+                'Build Frontend Image': {
+                    buildDockerImage(dir: 'frontend', image: FRONTEND_IMAGE)
                 }
             }
         }
@@ -95,12 +81,13 @@ pipeline {
         stage('Push Docker Images') {
             steps {
                 script {
-                    dockerLogin()
-                    def images = [ORDER_IMAGE, RESTAURANT_IMAGE, NOTIFICATION_IMAGE, FRONTEND_IMAGE]
-                    parallel images.collectEntries { image ->
-                        ["Push ${image.split('/').last()}" : {
-                            pushDockerImage(image)
-                        }]
+                    withDockerRegistry([credentialsId: 'docker-hub-credentials', url: "https://${DOCKER_REGISTRY}"]) {
+                        def images = [ORDER_IMAGE, RESTAURANT_IMAGE, NOTIFICATION_IMAGE, FRONTEND_IMAGE]
+                        parallel images.collectEntries { image ->
+                            ["Push ${image.split('/').last()}" : {
+                                pushDockerImage(image)
+                            }]
+                        }
                     }
                 }
             }
@@ -109,21 +96,30 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 script {
-                    sh "helm lint ./helm/food-delivery-chart"
-
-                    sh """
-                        helm upgrade --install food-delivery ./helm/food-delivery-chart \
-                        --set orderService.image.repository=${ORDER_IMAGE},orderService.image.tag=${BUILD_TAG} \
-                        --set restaurantService.image.repository=${RESTAURANT_IMAGE},restaurantService.image.tag=${BUILD_TAG} \
-                        --set notificationService.image.repository=${NOTIFICATION_IMAGE},notificationService.image.tag=${BUILD_TAG} \
-                        --set frontend.image.repository=${FRONTEND_IMAGE},frontend.image.tag=${BUILD_TAG}
-                    """
+                    try {
+                        sh "helm lint ./helm/food-delivery-chart"
+                        sh """
+                            helm upgrade --install food-delivery ./helm/food-delivery-chart \
+                            --set orderService.image.repository=${ORDER_IMAGE},orderService.image.tag=${BUILD_TAG} \
+                            --set restaurantService.image.repository=${RESTAURANT_IMAGE},restaurantService.image.tag=${BUILD_TAG} \
+                            --set notificationService.image.repository=${NOTIFICATION_IMAGE},notificationService.image.tag=${BUILD_TAG} \
+                            --set frontend.image.repository=${FRONTEND_IMAGE},frontend.image.tag=${BUILD_TAG}
+                        """
+                        sh 'kubectl rollout status deployment/food-delivery'
+                    } catch (Exception e) {
+                        currentBuild.result = 'FAILED'
+                        // Дополнительные действия при ошибке
+                        throw e
+                    }
                 }
             }
         }
     }
 
     post {
+        success {
+            archiveArtifacts artifacts: '**/target/*.jar, frontend/build/**', allowEmptyArchive: true
+        }
         always {
             cleanWs()
         }
@@ -133,16 +129,10 @@ pipeline {
 // Функции для повторного использования
 def buildDockerImage(Map params) {
     dir(params.dir) {
-        sh """
-            docker build -t ${params.image}:latest .
-            docker tag ${params.image}:latest ${params.image}:${env.BUILD_TAG}
-        """
-    }
-}
-
-def dockerLogin() {
-    withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-        sh 'echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin'
+        script {
+            def image = docker.build("${params.image}:latest")
+            image.tag("${params.image}:${env.BUILD_TAG}")
+        }
     }
 }
 
