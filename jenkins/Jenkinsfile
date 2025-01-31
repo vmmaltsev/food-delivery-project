@@ -34,19 +34,25 @@ pipeline {
 
         stage('Build & Test Backend Services') {
             parallel {
-                'Order Service': {
-                    dir('order-service') {
-                        sh 'mvn clean test package'
+                stage('Order Service') {
+                    steps {
+                        dir('order-service') {
+                            sh 'mvn clean test package'
+                        }
                     }
                 }
-                'Restaurant Service': {
-                    dir('restaurant-service') {
-                        sh 'mvn clean test package'
+                stage('Restaurant Service') {
+                    steps {
+                        dir('restaurant-service') {
+                            sh 'mvn clean test package'
+                        }
                     }
                 }
-                'Notification Service': {
-                    dir('notification-service') {
-                        sh 'mvn clean test package'
+                stage('Notification Service') {
+                    steps {
+                        dir('notification-service') {
+                            sh 'mvn clean test package'
+                        }
                     }
                 }
             }
@@ -63,17 +69,25 @@ pipeline {
 
         stage('Build Docker Images') {
             parallel {
-                'Build Order Image': {
-                    buildDockerImage(dir: 'order-service', image: ORDER_IMAGE)
+                stage('Build Order Image') {
+                    steps {
+                        buildDockerImage(dir: 'order-service', image: ORDER_IMAGE)
+                    }
                 }
-                'Build Restaurant Image': {
-                    buildDockerImage(dir: 'restaurant-service', image: RESTAURANT_IMAGE)
+                stage('Build Restaurant Image') {
+                    steps {
+                        buildDockerImage(dir: 'restaurant-service', image: RESTAURANT_IMAGE)
+                    }
                 }
-                'Build Notification Image': {
-                    buildDockerImage(dir: 'notification-service', image: NOTIFICATION_IMAGE)
+                stage('Build Notification Image') {
+                    steps {
+                        buildDockerImage(dir: 'notification-service', image: NOTIFICATION_IMAGE)
+                    }
                 }
-                'Build Frontend Image': {
-                    buildDockerImage(dir: 'frontend', image: FRONTEND_IMAGE)
+                stage('Build Frontend Image') {
+                    steps {
+                        buildDockerImage(dir: 'frontend', image: FRONTEND_IMAGE)
+                    }
                 }
             }
         }
@@ -83,11 +97,14 @@ pipeline {
                 script {
                     withDockerRegistry([credentialsId: 'docker-hub-credentials', url: "https://${DOCKER_REGISTRY}"]) {
                         def images = [ORDER_IMAGE, RESTAURANT_IMAGE, NOTIFICATION_IMAGE, FRONTEND_IMAGE]
-                        parallel images.collectEntries { image ->
-                            ["Push ${image.split('/').last()}" : {
+                        def pushStages = [:]
+                        images.each { image ->
+                            def imageName = image.split('/').last()
+                            pushStages["Push ${imageName}"] = {
                                 pushDockerImage(image)
-                            }]
+                            }
                         }
+                        parallel pushStages
                     }
                 }
             }
@@ -108,7 +125,7 @@ pipeline {
                         sh 'kubectl rollout status deployment/food-delivery'
                     } catch (Exception e) {
                         currentBuild.result = 'FAILED'
-                        // Дополнительные действия при ошибке
+                        // Добавьте уведомления или другие действия при ошибке
                         throw e
                     }
                 }
